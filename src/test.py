@@ -1,6 +1,6 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
-from pyspark.sql.types import *
+import json
 
 spark = SparkSession.builder \
     .master('local[1]') \
@@ -40,47 +40,41 @@ def master_array(df):
     return df
 
 
-def patient_extract(df, cols):
-    exprs = [first(x,True).alias(y) for x,y in cols.items()]
+def final_extract(df, cols):
+    expression = [first(x, True).alias(y) for x,y in cols.items()]
     df_temp = (df.groupBy('entry_resource_id')
-               .agg(*exprs))
+               .agg(*expression))
     df_temp = df_temp.select([col(c).alias(cols.get(c,c)) for c in df_temp.columns])
-
-        # df = (df.groupBy('entry_resource_id')
-        #   .agg(first(df['entry_resource_birthDate'], True).alias('birthdate'),
-        #        first(df['entry_resource_gender'], True).alias('gender'),
-        #        first(df['entry_resource_multipleBirthInteger'], True).alias('multiple_birth'),
-        #        first(df['entry_resource_maritalStatus_text'], True).alias('marital_status'),
-        #        first(df['entry_resource_telecom_value'], True).alias('telephone'),
-        #        first(df['entry_resource_name_prefix'], True).alias('prefix'),
-        #        first(df['entry_resource_name_family'], True).alias('family_name'),
-        #        first(df['entry_resource_name_given'], True).alias('given_name'),
-        #        first(df['entry_resource_name_use'], True).alias('name_usage'),
-        #        first(df['entry_resource_extension_valueAddress_city'], True).alias('city'),
-        #        first(df['entry_resource_extension_valueAddress_country'], True).alias('country'),
-        #        first(df['entry_resource_extension_valueAddress_state'], True).alias('state')
-        #        ))
     return df_temp
 
 
 def write_file(df, file_name):
-    df.coalesce(1).write.format('com.databricks.spark.csv').option('sep', '|').option('header', 'True').save(
+    df.coalesce(1).write.format('com.databricks.spark.csv').option('sep', '|').option('header', 'True').mode('overwrite').save(
         file_name)
-    print('File creation successful!')
+    print(f'{file_name} creation successful!')
 
 
+config_file = open('extract_config.json')
+extract_config = json.load(config_file)
+print('extract_config read!')
 df_json = spark.read.json('../data/*.json', multiLine=True)
+print('input files read!')
 df_output = master_array(df_json)
+print('files flattened!')
 df_output.createOrReplaceTempView('data')
-df_patient = spark.sql('''select * from data where entry_resource_resourceType = "Patient"''')
-patient_cols = {'entry_resource_birthDate': 'birthdate', 'entry_resource_gender': 'gender',
-                'entry_resource_multipleBirthInteger': 'multiple_birth',
-                'entry_resource_maritalStatus_text': 'marital_status', 'entry_resource_telecom_value': 'telephone',
-                'entry_resource_name_prefix': 'prefix',
-                'entry_resource_name_family': 'family_name', 'entry_resource_name_given': 'given_name',
-                'entry_resource_name_use': 'name_usage',
-                'entry_resource_extension_valueAddress_city': 'city',
-                'entry_resource_extension_valueAddress_country': 'country',
-                'entry_resource_extension_valueAddress_state': 'state'}
-df_patient = patient_extract(df_patient, patient_cols)
-write_file(df_patient, 'patient.csv')
+# resourceType = spark.sql('''select distinct entry_resource_resourceType from data''').rdd.flatMap(lambda x: x).collect()
+for rtype in extract_config.keys():
+    df_type = spark.sql(f'''select * from data where entry_resource_resourceType = "{str(rtype)}"''')
+
+# df_patient = spark.sql('''select * from data where entry_resource_resourceType = "Patient"''')
+# patient_cols = {'entry_resource_birthDate': 'birthdate', 'entry_resource_gender': 'gender',
+#                 'entry_resource_multipleBirthInteger': 'multiple_birth',
+#                 'entry_resource_maritalStatus_text': 'marital_status', 'entry_resource_telecom_value': 'telephone',
+#                 'entry_resource_name_prefix': 'prefix',
+#                 'entry_resource_name_family': 'family_name', 'entry_resource_name_given': 'given_name',
+#                 'entry_resource_name_use': 'name_usage',
+#                 'entry_resource_extension_valueAddress_city': 'city',
+#                 'entry_resource_extension_valueAddress_country': 'country',
+#                 'entry_resource_extension_valueAddress_state': 'state'}
+    df_final = final_extract(df_type, extract_config[rtype])
+    write_file(df_final, str(rtype) + '_table' + '.csv')
