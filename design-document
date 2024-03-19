@@ -18,3 +18,7 @@ High Level Design
 
 How to run
     Requirements.txt file is included in the repo where all the required libraries are listed with version
+    Place all the json files to be processed under data directory
+    Configure aws access and secret keys to establish connection (if not, job will fail during S3 upload)
+    Trigger the job (src/main.py)
+    In aws console, open athena service and start analysing the data
