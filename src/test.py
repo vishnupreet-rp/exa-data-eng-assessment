@@ -1,9 +1,9 @@
-import pandas as pd
-import uuid
-
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 import json
+import uuid
+import boto3
+from os import listdir
 
 spark = SparkSession.builder \
     .master('local[1]') \
@@ -69,6 +69,18 @@ def required_columns(extract_config):
 def update_id(filename):
     print(f'{filename} - update_id')
     return filename_dict[filename]
+
+
+def upload_s3(file, path):
+    try:
+        # s3_bucket = s3: // emis - input - bucket / Patient_table.csv / patient_table.csv
+        s3_bucket = path.split('//')[1].split('/')[0]
+        s3_path = f"{path.split('//')[1].split('/')[1]}/{path.split('//')[1].split('/')[1].lower()}"
+        print(f"{file.split('/')[-1]} - {s3_path}")
+        s3 = boto3.resource('s3')
+        s3.Bucket(s3_bucket).upload_file(file, s3_path)
+    except Exception as error:
+        print(f'exception occurred while s3 upload - {error}')
 
 
 config_file = open('extract_config.json')
@@ -146,3 +158,7 @@ for rtype in extract_config.keys():
     df_type = spark.sql(f'''select * from data where entry_resource_resourceType = "{str(rtype)}"''')
     df_final = final_extract(df_type, extract_config[rtype])
     write_file(df_final, str(rtype) + '_table' + '.csv')
+    file_name = [name for name in listdir(f"../src/{str(rtype) + '_table'}.csv/") if name.endswith('.csv')]
+    upload_s3(f"../src/{str(rtype) + '_table'}.csv/{file_name[0]}", f"s3://emis-input-bucket/{str(rtype) + '_table' + '.csv'}/")
+
+    # s3: // emis - input - bucket / Patient_table.csv / patient_table.csv
