@@ -1,0 +1,20 @@
+Problem
+    Patient data is spread across multiple semi structured files which makes analysis hard
+
+Task
+    Re-format the files into a readable format to perform analysis
+
+Solution
+    Using PySpark job format the files, generate extracts and upload to S3
+
+Tech Stack
+    -> PySpark
+    -> S3
+    ->Athena
+
+High Level Design
+    Input json files -> PySpark job (Transformation) -> Upload files to S3 -> Query data using Athena
+
+
+How to run
+    Requirements.txt file is included in the repo where all the required libraries are listed with version
